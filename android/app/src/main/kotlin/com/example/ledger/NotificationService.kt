@@ -106,14 +106,14 @@ class NotificationService : NotificationListenerService(), MethodChannel.MethodC
         Log.d(TAG, "收到通知[$packageName]\ntitle=$title\ntext=$text\nbig=$bigText\nsub=$subText\nsummary=$summaryText")
 
         val source = PAYMENT_PACKAGES[packageName] ?: return
-        val notification = parsePayment(source, title, full) ?: return
+        val notification = parsePayment(source, title, text, full) ?: return
 
         Log.d(TAG, "解析成功: ${notification.source} ${notification.type} ¥${notification.amount} merchant=${notification.merchant}")
         sendToFlutter(notification)
     }
 
     // ==================== 解析 ====================
-    private fun parsePayment(source: String, title: String, full: String): PaymentNotification? {
+    private fun parsePayment(source: String, title: String, text: String, full: String): PaymentNotification? {
         // 1. 先按 ¥/￥ 取金额
         var matcher = AMOUNT_PATTERN.matcher(full)
         val amount: Double
