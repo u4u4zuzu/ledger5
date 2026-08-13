@@ -16,11 +16,13 @@ class StockApiService {
   }
 
   /// 获取股票信息（名称 + 最新价格）
-  /// 数据源：东方财富 push2 行情接口（UTF-8，价格以小数返回）
+  /// 数据源：东方财富 push2 行情接口。
+  /// 关键点：必须带 `fltt=2`，否则 f43 返回的是「放大 100/1000 倍的整型原始值」，
+  /// 单价会显示成 882.0 之类错误数字。东方财富官网行情页自身也使用 fltt=2，
+  /// 该参数会让接口按字段精度直接返回正确的小数价（如 8.82）。
   static Future<Map<String, dynamic>?> fetchStockInfo(String stockCode) async {
     try {
       final secid = _toSecid(stockCode);
-      // fltt=2 强制东方财富返回正常小数价；缺少该参数时 f43 会返回放大 100 倍的整数值
       final url = 'https://push2.eastmoney.com/api/qt/stock/get'
           '?secid=$secid'
           '&fields=f43,f57,f58,f60'
@@ -40,22 +42,18 @@ class StockApiService {
         final d = data['data'];
         if (d == null) return null;
 
+        // fltt=2 下 f43 已是正确小数价（例如 8.82），无需再乘除缩放。
         final price = (d['f43'] as num?)?.toDouble();
         final name = d['f58'] as String?;
         final code = (d['f57'] as String?) ?? stockCode;
 
-        // 安全兜底：极罕见的超大值（如整数缩放）还原，正常情况下 fltt=2 已返回正确小数
-        var safePrice = price;
-        if (safePrice != null && safePrice > 100000) {
-          safePrice = safePrice / 1000;
-        }
-
-        if (safePrice != null && safePrice > 0 && name != null && name.isNotEmpty) {
-          print('✅ 获取股票信息 [$stockCode] $name: ¥$safePrice');
+        // 仅做合法性校验：价格必须为正且名称存在，避免把异常数据写入账本。
+        if (price != null && price > 0 && name != null && name.isNotEmpty) {
+          print('✅ 获取股票信息 [$stockCode] $name: ¥$price');
           return {
             'code': code,
             'name': name,
-            'price': safePrice,
+            'price': price,
           };
         }
       }
