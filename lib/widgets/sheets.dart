@@ -18,16 +18,19 @@ Future<T?> _showSheet<T>(BuildContext context, Widget child) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => Container(
-      decoration: AppTheme.sheetDecoration,
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
-      padding: EdgeInsets.only(
-        left: 18,
-        right: 18,
-        top: 12,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+    builder: (sheetContext) => AnimatedPadding(
+      // 跟随软键盘高度自动上推弹窗，避免输入框被键盘遮住
+      padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: Container(
+        decoration: AppTheme.sheetDecoration,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetContext).size.height * 0.92,
+        ),
+        padding: const EdgeInsets.only(left: 18, right: 18, top: 12, bottom: 24),
+        child: SingleChildScrollView(child: child),
       ),
-      child: SingleChildScrollView(child: child),
     ),
   );
 }
@@ -182,6 +185,7 @@ class _AddTransactionSheetState extends ConsumerState<_AddTransactionSheet> {
     _categoryId ??= cats.first['id'];
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
@@ -584,6 +588,7 @@ class _AddAssetSheetState extends ConsumerState<_AddAssetSheet> {
   Widget build(BuildContext context) {
     final unit = widget.isFund ? '净值' : '价格';
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
@@ -738,6 +743,7 @@ class _AddAccountSheetState extends ConsumerState<_AddAccountSheet> {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
@@ -833,6 +839,7 @@ class _AccountDetailSheetState extends ConsumerState<_AccountDetailSheet> {
   Widget build(BuildContext context) {
     final meta = accountMeta[widget.account.type]!;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
@@ -957,6 +964,7 @@ class _SmsSheetState extends ConsumerState<_SmsSheet> {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
@@ -1154,6 +1162,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _handle(),
