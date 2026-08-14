@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/database.dart';
 import '../providers/asset_providers.dart';
@@ -52,6 +53,16 @@ Widget _sectionTitle(String text) => Padding(
       child: Text(
         text,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.sub),
+      ),
+    );
+
+Widget _infoRow(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(width: 52, child: Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.sub))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+        ],
       ),
     );
 
@@ -1273,6 +1284,33 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
             ],
           ),
         ),
+        _ghostButton('关于', () async {
+          final info = await PackageInfo.fromPlatform();
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('关于本应用'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('实时资产记账', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 10),
+                    _infoRow('版本', '${info.version} (build ${info.buildNumber})'),
+                    _infoRow('包名', info.packageName),
+                    const SizedBox(height: 10),
+                    const Text('基于 Flutter + Drift/SQLite 构建，支持实时记账、基金/股票行情、支付通知与短信自动记账。',
+                        style: TextStyle(fontSize: 12, color: AppTheme.sub, height: 1.5)),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+                ],
+              ),
+            );
+          }
+        }),
         _ghostButton('恢复演示数据', () async {
           final ok = await showDialog<bool>(
             context: context,
