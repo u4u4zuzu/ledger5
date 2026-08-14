@@ -99,8 +99,20 @@ final monthlyCategoryStatsProvider = StreamProvider.family<Map<String, double>, 
 // ==================== 新增：累计收支（全部时间） ====================
 
 /// 累计收支统计（全部时间，不含删除与转账） {income: 收入, expense: 支出}
-/// 基于交易表 watch，任意记账/删除操作都会触发刷新
+/// 直接监听整张交易表（watchAllTransactions，不限笔数），任意记账/编辑/删除都会触发刷新。
+/// 之前用 watchRecentTransactions(limit:50)+getTotalStats 的方式会因 limit 窗口漏触发，导致不实时更新。
 final totalStatsProvider = StreamProvider<Map<String, double>>((ref) {
   final db = ref.watch(databaseProvider);
-  return db.watchRecentTransactions().asyncMap((_) => db.getTotalStats());
+  return db.watchAllTransactions().map((transactions) {
+    double income = 0;
+    double expense = 0;
+    for (final tx in transactions) {
+      if (tx.type == TransactionType.income) {
+        income += tx.amount;
+      } else if (tx.type == TransactionType.expense) {
+        expense += tx.amount.abs();
+      }
+    }
+    return {'income': income, 'expense': expense};
+  });
 });
