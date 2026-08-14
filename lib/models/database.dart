@@ -374,7 +374,7 @@ class AppDatabase extends _$AppDatabase {
       .watch();
   }
 
-    /// 监听全部交易（不含已删除），用于累计收支统计。
+  /// 监听全部交易（不含已删除），用于累计收支统计。
   /// 不限笔数、直接监听整张表，任意记账/编辑/删除都会触发重算，避免 limit 窗口漏触发。
   Stream<List<Transaction>> watchAllTransactions() {
     return (select(transactions)
@@ -458,6 +458,38 @@ class AppDatabase extends _$AppDatabase {
     await (update(accounts)..where((a) => a.id.equals(accountId))).write(
       AccountsCompanion(currentBalance: Value(newBalance), updatedAt: Value(DateTime.now())),
     );
+  }
+
+  /// 编辑已存在交易的分类与账户（仅针对普通收入/支出，转账涉及双账户不在本方法处理）。
+  /// 会相应地回滚旧账户余额、写入新账户余额，保持账户资产准确。
+  Future<void> updateTransactionFields(String id, {String? categoryId, String? accountId}) async {
+    final old = await (select(transactions)..where((t) => t.id.equals(id))).getSingle();
+    if (old.type == TransactionType.transfer) return; // 转账不在此处改账户
+    final newAccountId = accountId ?? old.accountId;
+    final amount = old.amount.abs();
+
+    await transaction(() async {
+      // 1. 回滚旧账户余额
+      if (old.type == TransactionType.expense) {
+        await _updateBalance(old.accountId, amount);
+      } else if (old.type == TransactionType.income) {
+        await _updateBalance(old.accountId, -amount);
+      }
+      // 2. 更新分类 / 账户字段
+      await (update(transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(
+          categoryId: Value(categoryId ?? old.categoryId),
+          accountId: Value(newAccountId),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      // 3. 写入新账户余额
+      if (old.type == TransactionType.expense) {
+        await _updateBalance(newAccountId, -amount);
+      } else if (old.type == TransactionType.income) {
+        await _updateBalance(newAccountId, amount);
+      }
+    });
   }
 
   // ==================== 基金方法 ====================
