@@ -374,6 +374,15 @@ class AppDatabase extends _$AppDatabase {
       .watch();
   }
 
+    /// 监听全部交易（不含已删除），用于累计收支统计。
+  /// 不限笔数、直接监听整张表，任意记账/编辑/删除都会触发重算，避免 limit 窗口漏触发。
+  Stream<List<Transaction>> watchAllTransactions() {
+    return (select(transactions)
+      ..where((t) => t.isDeleted.equals(false))
+      ..orderBy([(t) => OrderingTerm(expression: t.transactionDate, mode: OrderingMode.desc)]))
+      .watch();
+  }
+
   Future<Map<String, double>> getMonthlyStats(int year, int month) async {
     final start = DateTime(year, month, 1);
     final end = DateTime(year, month + 1, 1);
