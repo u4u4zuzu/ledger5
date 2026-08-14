@@ -79,7 +79,9 @@ class _Tile extends ConsumerWidget {
     final title = isTransfer ? '转账' : categoryName(tx.categoryId);
     final emoji = isTransfer ? '🔁' : (isExpense ? categoryEmoji(tx.categoryId) : '💰');
 
-    return Dismissible(
+    return InkWell(
+      onTap: isTransfer ? null : () => _editTx(context, ref),
+      child: Dismissible(
       key: Key(tx.id),
       direction: DismissDirection.endToStart,
       background: Container(
@@ -152,6 +154,169 @@ class _Tile extends ConsumerWidget {
           ],
         ),
       ),
+      ),
+    );
+  }
+
+  void _editTx(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _EditTxSheet(tx: tx),
     );
   }
 }
+
+/// 编辑交易：调整分类与账户（仅收入/支出，转账不支持改账户）
+class _EditTxSheet extends ConsumerStatefulWidget {
+  final Transaction tx;
+  const _EditTxSheet({required this.tx});
+
+  @override
+  ConsumerState<_EditTxSheet> createState() => _EditTxSheetState();
+}
+
+class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
+  late String _categoryId;
+  late String _accountId;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryId = widget.tx.categoryId ?? '';
+    _accountId = widget.tx.accountId;
+  }
+
+  List<Map<String, String>> get _cats => categoriesForType(widget.tx.type);
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(databaseProvider).updateTransactionFields(
+            widget.tx.id,
+            categoryId: _categoryId.isEmpty ? null : _categoryId,
+            accountId: _accountId,
+          );
+      if (mounted) {
+        Navigator.pop(context);
+        showToast(context, '已更新分类/账户');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showToast(context, '更新失败：$e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = ref.watch(accountsProvider);
+    final isExpense = widget.tx.type == TransactionType.expense;
+    final title = isExpense ? '支出' : '收入';
+
+    return AnimatedPadding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      duration: const Duration(milliseconds: 200),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: AppTheme.line, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Text('编辑$title · ${formatMoney(widget.tx.amount.abs())}',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 14),
+              const Text('分类', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _cats.map((c) {
+                  final selected = _categoryId == c['id'];
+                  return InkWell(
+                    onTap: () => setState(() => _categoryId = c['id']!),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: selected ? AppTheme.primary : AppTheme.primarySoft,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(c['emoji']!, style: const TextStyle(fontSize: 15)),
+                          const SizedBox(width: 6),
+                          Text(c['name']!,
+                              style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w700, color: selected ? Colors.white : AppTheme.ink)),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 18),
+              const Text('账户', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
+              const SizedBox(height: 8),
+              accounts.when(
+                data: (list) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.line),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: list.any((a) => a.id == _accountId) ? _accountId : null,
+                      hint: const Text('选择账户'),
+                      items: list.map((a) => DropdownMenuItem(value: a.id, child: Text('${accountMeta[a.type]?.emoji ?? '💼'} ${a.name}'))).toList(),
+                      onChanged: (v) => setState(() => _accountId = v!),
+                    ),
+                  ),
+                ),
+                loading: () => const CircularProgressIndicator(),
+                error: (_, __) => const Text('账户加载失败'),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _saving
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('保存', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
