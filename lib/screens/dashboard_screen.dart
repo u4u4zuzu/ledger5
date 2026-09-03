@@ -29,6 +29,10 @@ class DashboardScreen extends ConsumerWidget {
     final monthStats = ref.watch(monthlyStatsProvider('${selectedMonth.year}-${selectedMonth.month}'));
     final monthCat =
         ref.watch(monthlyCategoryStatsProvider('${pieType.name}-${selectedMonth.year}-${selectedMonth.month}'));
+    final selectedYear = ref.watch(selectedYearProvider);
+    final yearPieType = ref.watch(yearlyPieTypeProvider);
+    final yearStats = ref.watch(yearlyStatsProvider(selectedYear));
+    final yearCat = ref.watch(yearlyCategoryStatsProvider('${yearPieType.name}-${selectedYear}'));
     final accounts = ref.watch(accountsProvider);
 
     return ListView(
@@ -262,6 +266,146 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
 
+        // 年度账单（历史每年，支出/收入细节，实时更新）
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 年份导航
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.chevron_left, size: 20),
+                        onPressed: () => _shiftYear(ref, -1),
+                      ),
+                      Text('${selectedYear}年',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.chevron_right, size: 20),
+                        onPressed: () => _shiftYear(ref, 1),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(selectedYearProvider.notifier).state = DateTime.now().year,
+                    child: const Text('回到今年', style: TextStyle(fontSize: 12, color: AppTheme.sub)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // 当年收入 / 支出 合计
+              Row(
+                children: [
+                  Expanded(
+                    child: _MiniStat('年度收入',
+                        yearStats.when(
+                          data: (s) => formatMoney(s['income'] ?? 0),
+                          loading: () => '--',
+                          error: (_, __) => '--',
+                        ),
+                        AppTheme.green),
+                  ),
+                  Expanded(
+                    child: _MiniStat('年度支出',
+                        yearStats.when(
+                          data: (s) => formatMoney(s['expense'] ?? 0),
+                          loading: () => '--',
+                          error: (_, __) => '--',
+                        ),
+                        AppTheme.red),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 支出 / 收入 切换（控制饼图类型）
+              Row(
+                children: [
+                  _segButton('支出', yearPieType == TransactionType.expense, () =>
+                      ref.read(yearlyPieTypeProvider.notifier).state = TransactionType.expense),
+                  const SizedBox(width: 8),
+                  _segButton('收入', yearPieType == TransactionType.income, () =>
+                      ref.read(yearlyPieTypeProvider.notifier).state = TransactionType.income),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 选中年份、选中类型的分类饼图 + 明细
+              yearCat.when(
+                data: (stats) {
+                  if (stats.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Text('${selectedYear}年暂无${yearPieType == TransactionType.expense ? '支出' : '收入'}',
+                            style: const TextStyle(color: AppTheme.sub)),
+                      ),
+                    );
+                  }
+                  final entries = stats.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value));
+                  final total = entries.fold(0.0, (s, e) => s + e.value);
+                  return Row(
+                    children: [
+                      // fl_chart 扇形外半径 = centerSpaceRadius + section.radius，34 + 28 = 62 ≤ 70，不溢出。
+                      SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: PieChart(
+                          PieChartData(
+                            sectionsSpace: 2,
+                            centerSpaceRadius: 34,
+                            sections: entries.asMap().entries.map((e) {
+                              final idx = e.key;
+                              final entry = e.value;
+                              return PieChartSectionData(
+                                color: _piePalette[idx % _piePalette.length],
+                                value: entry.value,
+                                radius: 28,
+                                title: '',
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          children: entries.map((e) {
+                            final pct = total > 0 ? (e.value / total * 100) : 0.0;
+                            final color = _piePalette[entries.indexOf(e) % _piePalette.length];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3.5),
+                              child: Row(
+                                children: [
+                                  Container(width: 11, height: 11, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+                                  const SizedBox(width: 7),
+                                  Expanded(child: Text(categoryName(e.key), style: const TextStyle(fontSize: 12))),
+                                  Text(formatMoney(e.value), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  const SizedBox(width: 8),
+                                  Text('${pct.toStringAsFixed(1)}%',
+                                      style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
+                error: (_, __) => const SizedBox(height: 120, child: Center(child: Text('加载失败'))),
+              ),
+            ],
+          ),
+        ),
+
         // 我的账户
         AppCard(
           child: Column(
@@ -345,6 +489,12 @@ class DashboardScreen extends ConsumerWidget {
 void _shiftMonth(WidgetRef ref, int delta) {
   final cur = ref.read(selectedMonthProvider);
   ref.read(selectedMonthProvider.notifier).state = DateTime(cur.year, cur.month + delta, 1);
+}
+
+/// 切换看板选中的年份（delta: -1 上一年, +1 下一年）
+void _shiftYear(WidgetRef ref, int delta) {
+  final cur = ref.read(selectedYearProvider);
+  ref.read(selectedYearProvider.notifier).state = cur + delta;
 }
 
 /// 支出 / 收入 切换按钮
