@@ -474,7 +474,11 @@ class AppDatabase extends _$AppDatabase {
   /// 编辑已存在交易的分类、账户、金额与备注（仅针对普通收入/支出，转账涉及双账户不在本方法处理）。
   /// 会相应地回滚旧余额（旧金额/旧账户）、写入新余额（新金额/新账户），保持账户资产准确。
   Future<void> updateTransactionFields(String id,
-      {String? categoryId, String? accountId, double? amount, String? description}) async {
+      {String? categoryId,
+      String? accountId,
+      double? amount,
+      String? description,
+      DateTime? transactionDate}) async {
     final old = await (select(transactions)..where((t) => t.id.equals(id))).getSingle();
     if (old.type == TransactionType.transfer) return; // 转账不在此处改账户/金额
     final newAccountId = accountId ?? old.accountId;
@@ -506,6 +510,7 @@ class AppDatabase extends _$AppDatabase {
           accountId: Value(newAccountId),
           amount: Value(old.type == TransactionType.expense ? -newAmount : newAmount),
           description: description != null ? Value(description) : const Value.absent(),
+          transactionDate: transactionDate != null ? Value(transactionDate) : const Value.absent(),
           updatedAt: Value(DateTime.now()),
         ),
       );
