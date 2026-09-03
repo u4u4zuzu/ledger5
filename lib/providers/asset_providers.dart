@@ -8,6 +8,14 @@ final databaseProvider = Provider<AppDatabase>((ref) => AppDatabase());
 /// 供跨页面跳转使用（如看板「管理 ›」跳到账户页）
 final tabIndexProvider = StateProvider<int>((ref) => 0);
 
+/// 看板「收支占比」卡片选中的月份（用于历史月份浏览），默认当月
+final selectedMonthProvider = StateProvider<DateTime>(
+  (ref) => DateTime(DateTime.now().year, DateTime.now().month, 1),
+);
+
+/// 看板「收支占比」卡片饼图展示的交易类型（支出/收入切换）
+final monthlyPieTypeProvider = StateProvider<TransactionType>((ref) => TransactionType.expense);
+
 /// 账户列表
 final accountsProvider = StreamProvider<List<Account>>((ref) {
   final db = ref.watch(databaseProvider);
@@ -64,11 +72,14 @@ final categoryStatsProvider = StreamProvider.family<Map<String, double>, Transac
 
 // ==================== 新增：本月统计 ====================
 
-/// 本月收支统计 {income: 收入, expense: 支出}
-final monthlyStatsProvider = StreamProvider<Map<String, double>>((ref) {
+/// 指定月份的收支统计 {income: 收入, expense: 支出}
+/// key 格式：'year-month'，例如 '2025-5'
+final monthlyStatsProvider = StreamProvider.family<Map<String, double>, String>((ref, key) {
+  final parts = key.split('-');
+  final year = int.parse(parts[0]);
+  final month = int.parse(parts[1]);
   final db = ref.watch(databaseProvider);
-  final now = DateTime.now();
-  return db.watchMonthlyTransactions(now.year, now.month).map((transactions) {
+  return db.watchMonthlyTransactions(year, month).map((transactions) {
     double income = 0;
     double expense = 0;
     for (final tx in transactions) {
@@ -82,11 +93,15 @@ final monthlyStatsProvider = StreamProvider<Map<String, double>>((ref) {
   });
 });
 
-/// 本月分类统计（用于饼图）
-final monthlyCategoryStatsProvider = StreamProvider.family<Map<String, double>, TransactionType>((ref, type) {
+/// 指定月份、指定类型的分类统计（用于饼图）
+/// key 格式：'type-year-month'，例如 'expense-2025-5'
+final monthlyCategoryStatsProvider = StreamProvider.family<Map<String, double>, String>((ref, key) {
+  final parts = key.split('-');
+  final type = TransactionType.values.byName(parts[0]);
+  final year = int.parse(parts[1]);
+  final month = int.parse(parts[2]);
   final db = ref.watch(databaseProvider);
-  final now = DateTime.now();
-  return db.watchMonthlyTransactions(now.year, now.month).map((transactions) {
+  return db.watchMonthlyTransactions(year, month).map((transactions) {
     final Map<String, double> stats = {};
     for (final tx in transactions.where((t) => t.type == type && !t.isDeleted)) {
       final catId = tx.categoryId ?? '未分类';
