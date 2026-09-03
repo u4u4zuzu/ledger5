@@ -189,6 +189,7 @@ class _AddTransactionSheetState extends ConsumerState<_AddTransactionSheet> {
   String? _categoryId;
   final _amountC = TextEditingController();
   final _noteC = TextEditingController();
+  DateTime _date = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
@@ -291,6 +292,37 @@ class _AddTransactionSheetState extends ConsumerState<_AddTransactionSheet> {
           ),
         ),
         const SizedBox(height: 14),
+        _sectionTitle('记录时间'),
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _date,
+              firstDate: DateTime(2000),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null) setState(() => _date = picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.bg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.line),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 16, color: AppTheme.sub),
+                const SizedBox(width: 8),
+                Text('${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontSize: 14)),
+                const Spacer(),
+                const Text('默认今日，点击修改', style: TextStyle(fontSize: 12, color: AppTheme.sub)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
         _primaryButton('保存', _save),
         _ghostButton('取消', () => Navigator.pop(context)),
       ],
@@ -320,7 +352,7 @@ class _AddTransactionSheetState extends ConsumerState<_AddTransactionSheet> {
       type: Value(_type),
       categoryId: Value(_categoryId),
       merchant: Value(_noteC.text.isEmpty ? null : _noteC.text),
-      transactionDate: Value(DateTime.now()),
+      transactionDate: Value(_date),
       source: const Value('manual'),
     ));
     if (mounted) {
