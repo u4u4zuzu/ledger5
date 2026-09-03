@@ -24,7 +24,11 @@ class DashboardScreen extends ConsumerWidget {
     final totalAssets = ref.watch(totalAssetsProvider);
     final todayStats = ref.watch(todayStatsProvider);
     final totalStats = ref.watch(totalStatsProvider);
-    final monthlyCat = ref.watch(monthlyCategoryStatsProvider(TransactionType.expense));
+    final selectedMonth = ref.watch(selectedMonthProvider);
+    final pieType = ref.watch(monthlyPieTypeProvider);
+    final monthStats = ref.watch(monthlyStatsProvider('${selectedMonth.year}-${selectedMonth.month}'));
+    final monthCat =
+        ref.watch(monthlyCategoryStatsProvider('${pieType.name}-${selectedMonth.year}-${selectedMonth.month}'));
     final accounts = ref.watch(accountsProvider);
 
     return ListView(
@@ -116,34 +120,85 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
 
-        // 本月支出占比
+        // 本月 / 历史月份 收支占比
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 月份导航
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('本月支出占比', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primarySoft,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('${DateTime.now().month} 月',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                  Row(
+                    children: [
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.chevron_left, size: 20),
+                        onPressed: () => _shiftMonth(ref, -1),
+                      ),
+                      Text('${selectedMonth.year}年${selectedMonth.month}月',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(Icons.chevron_right, size: 20),
+                        onPressed: () => _shiftMonth(ref, 1),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () => ref.read(selectedMonthProvider.notifier).state =
+                        DateTime(DateTime.now().year, DateTime.now().month, 1),
+                    child: const Text('回到本月', style: TextStyle(fontSize: 12, color: AppTheme.sub)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // 当月收入 / 支出 合计
+              Row(
+                children: [
+                  Expanded(
+                    child: _MiniStat('本月收入',
+                        monthStats.when(
+                          data: (s) => formatMoney(s['income'] ?? 0),
+                          loading: () => '--',
+                          error: (_, __) => '--',
+                        ),
+                        AppTheme.green),
+                  ),
+                  Expanded(
+                    child: _MiniStat('本月支出',
+                        monthStats.when(
+                          data: (s) => formatMoney(s['expense'] ?? 0),
+                          loading: () => '--',
+                          error: (_, __) => '--',
+                        ),
+                        AppTheme.red),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              monthlyCat.when(
+              // 支出 / 收入 切换（控制饼图类型）
+              Row(
+                children: [
+                  _segButton('支出', pieType == TransactionType.expense, () =>
+                      ref.read(monthlyPieTypeProvider.notifier).state = TransactionType.expense),
+                  const SizedBox(width: 8),
+                  _segButton('收入', pieType == TransactionType.income, () =>
+                      ref.read(monthlyPieTypeProvider.notifier).state = TransactionType.income),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 选中月份、选中类型的分类饼图 + 明细
+              monthCat.when(
                 data: (stats) {
                   if (stats.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 18),
-                        child: Text('本月暂无支出', style: TextStyle(color: AppTheme.sub)),
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Text('${selectedMonth.month}月暂无${pieType == TransactionType.expense ? '支出' : '收入'}',
+                            style: const TextStyle(color: AppTheme.sub)),
                       ),
                     );
                   }
@@ -285,3 +340,27 @@ class DashboardScreen extends ConsumerWidget {
         ],
       );
 }
+
+/// 切换看板选中的月份（delta: -1 上一月, +1 下一月）
+void _shiftMonth(WidgetRef ref, int delta) {
+  final cur = ref.read(selectedMonthProvider);
+  ref.read(selectedMonthProvider.notifier).state = DateTime(cur.year, cur.month + delta, 1);
+}
+
+/// 支出 / 收入 切换按钮
+Widget _segButton(String label, bool active, VoidCallback onTap) => Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppTheme.primary : AppTheme.bg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: active ? Colors.white : AppTheme.sub)),
+        ),
+      ),
+    );
