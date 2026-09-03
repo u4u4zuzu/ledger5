@@ -180,6 +180,7 @@ class _EditTxSheet extends ConsumerStatefulWidget {
 class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
   late String _categoryId;
   late String _accountId;
+  late DateTime _txDate;
   late TextEditingController _amountC;
   late TextEditingController _noteC;
   bool _saving = false;
@@ -189,6 +190,7 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
     super.initState();
     _categoryId = widget.tx.categoryId ?? '';
     _accountId = widget.tx.accountId;
+    _txDate = widget.tx.transactionDate;
     _amountC = TextEditingController(text: widget.tx.amount.abs().toStringAsFixed(2));
     _noteC = TextEditingController(text: widget.tx.description ?? '');
   }
@@ -217,6 +219,7 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
             accountId: _accountId,
             amount: amount,
             description: _noteC.text.trim(),
+            transactionDate: _txDate,
           );
       if (mounted) {
         Navigator.pop(context);
@@ -351,6 +354,37 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
                   ),
                 ),
               ),
+              const SizedBox(height: 18),
+              const Text('交易时间', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _txDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setState(() => _txDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bg,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.line),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 16, color: AppTheme.sub),
+                      const SizedBox(width: 8),
+                      Text(_fmtDate(_txDate), style: const TextStyle(fontSize: 14)),
+                      const Spacer(),
+                      const Text('点击修改', style: TextStyle(fontSize: 12, color: AppTheme.sub)),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -374,4 +408,8 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
     );
   }
 }
+
+/// 日期格式化 yyyy-MM-dd
+String _fmtDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
