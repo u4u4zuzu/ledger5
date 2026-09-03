@@ -460,35 +460,44 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// 编辑已存在交易的分类与账户（仅针对普通收入/支出，转账涉及双账户不在本方法处理）。
-  /// 会相应地回滚旧账户余额、写入新账户余额，保持账户资产准确。
-  Future<void> updateTransactionFields(String id, {String? categoryId, String? accountId}) async {
+  /// 编辑已存在交易的分类、账户、金额与备注（仅针对普通收入/支出，转账涉及双账户不在本方法处理）。
+  /// 会相应地回滚旧余额（旧金额/旧账户）、写入新余额（新金额/新账户），保持账户资产准确。
+  Future<void> updateTransactionFields(String id,
+      {String? categoryId, String? accountId, double? amount, String? description}) async {
     final old = await (select(transactions)..where((t) => t.id.equals(id))).getSingle();
-    if (old.type == TransactionType.transfer) return; // 转账不在此处改账户
+    if (old.type == TransactionType.transfer) return; // 转账不在此处改账户/金额
     final newAccountId = accountId ?? old.accountId;
-    final amount = old.amount.abs();
+    final newAmount = amount ?? old.amount.abs();
+    // 金额是否变化（容差比较，避免浮点误差）
+    final amountChanged = amount != null && (newAmount - old.amount.abs()).abs() > 1e-9;
 
     await transaction(() async {
-      // 1. 回滚旧账户余额
-      if (old.type == TransactionType.expense) {
-        await _updateBalance(old.accountId, amount);
-      } else if (old.type == TransactionType.income) {
-        await _updateBalance(old.accountId, -amount);
+      // 1. 回滚旧余额（仅当金额或账户变化时）
+      if (amountChanged || newAccountId != old.accountId) {
+        if (old.type == TransactionType.expense) {
+          await _updateBalance(old.accountId, old.amount.abs());
+        } else if (old.type == TransactionType.income) {
+          await _updateBalance(old.accountId, -old.amount.abs());
+        }
       }
-      // 2. 更新分类 / 账户字段
+      // 2. 写入新余额
+      if (amountChanged || newAccountId != old.accountId) {
+        if (old.type == TransactionType.expense) {
+          await _updateBalance(newAccountId, -newAmount);
+        } else if (old.type == TransactionType.income) {
+          await _updateBalance(newAccountId, newAmount);
+        }
+      }
+      // 3. 更新字段
       await (update(transactions)..where((t) => t.id.equals(id))).write(
         TransactionsCompanion(
           categoryId: Value(categoryId ?? old.categoryId),
           accountId: Value(newAccountId),
+          amount: Value(old.type == TransactionType.expense ? -newAmount : newAmount),
+          description: description != null ? Value(description) : const Value.absent(),
           updatedAt: Value(DateTime.now()),
         ),
       );
-      // 3. 写入新账户余额
-      if (old.type == TransactionType.expense) {
-        await _updateBalance(newAccountId, -amount);
-      } else if (old.type == TransactionType.income) {
-        await _updateBalance(newAccountId, amount);
-      }
     });
   }
 
