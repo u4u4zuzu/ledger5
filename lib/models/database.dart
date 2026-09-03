@@ -366,6 +366,17 @@ class AppDatabase extends _$AppDatabase {
       .watch();
   }
 
+  /// 按年查询交易（用于年度账单）
+  Stream<List<Transaction>> watchYearlyTransactions(int year) {
+    final start = DateTime(year, 1, 1);
+    final end = DateTime(year + 1, 1, 1);
+    return (select(transactions)
+      ..where((t) => t.transactionDate.isBetweenValues(start, end))
+      ..where((t) => t.isDeleted.equals(false))
+      ..orderBy([(t) => OrderingTerm(expression: t.transactionDate, mode: OrderingMode.desc)]))
+      .watch();
+  }
+
   Stream<List<Transaction>> watchRecentTransactions({int limit = 50}) {
     return (select(transactions)
       ..where((t) => t.isDeleted.equals(false))
