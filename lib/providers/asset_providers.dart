@@ -111,6 +111,48 @@ final monthlyCategoryStatsProvider = StreamProvider.family<Map<String, double>, 
   });
 });
 
+// ==================== 新增：年度账单 ====================
+
+/// 看板「年度账单」卡片选中的年份（用于历史年份浏览），默认当年
+final selectedYearProvider = StateProvider<int>((ref) => DateTime.now().year);
+
+/// 看板「年度账单」卡片饼图展示的交易类型（支出/收入切换）
+final yearlyPieTypeProvider = StateProvider<TransactionType>((ref) => TransactionType.expense);
+
+/// 指定年份的收支统计 {income: 收入, expense: 支出}
+final yearlyStatsProvider = StreamProvider.family<Map<String, double>, int>((ref, year) {
+  final db = ref.watch(databaseProvider);
+  return db.watchYearlyTransactions(year).map((transactions) {
+    double income = 0;
+    double expense = 0;
+    for (final tx in transactions) {
+      if (tx.type == TransactionType.income && !tx.isDeleted) {
+        income += tx.amount;
+      } else if (tx.type == TransactionType.expense && !tx.isDeleted) {
+        expense += tx.amount.abs();
+      }
+    }
+    return {'income': income, 'expense': expense};
+  });
+});
+
+/// 指定年份、指定类型的分类统计（用于饼图）
+/// key 格式：'type-year'，例如 'expense-2025'
+final yearlyCategoryStatsProvider = StreamProvider.family<Map<String, double>, String>((ref, key) {
+  final parts = key.split('-');
+  final type = TransactionType.values.byName(parts[0]);
+  final year = int.parse(parts[1]);
+  final db = ref.watch(databaseProvider);
+  return db.watchYearlyTransactions(year).map((transactions) {
+    final Map<String, double> stats = {};
+    for (final tx in transactions.where((t) => t.type == type && !t.isDeleted)) {
+      final catId = tx.categoryId ?? '未分类';
+      stats[catId] = (stats[catId] ?? 0) + tx.amount.abs();
+    }
+    return stats;
+  });
+});
+
 // ==================== 新增：累计收支（全部时间） ====================
 
 /// 累计收支统计（全部时间，不含删除与转账） {income: 收入, expense: 支出}
