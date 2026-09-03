@@ -180,6 +180,8 @@ class _EditTxSheet extends ConsumerStatefulWidget {
 class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
   late String _categoryId;
   late String _accountId;
+  late TextEditingController _amountC;
+  late TextEditingController _noteC;
   bool _saving = false;
 
   @override
@@ -187,22 +189,38 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
     super.initState();
     _categoryId = widget.tx.categoryId ?? '';
     _accountId = widget.tx.accountId;
+    _amountC = TextEditingController(text: widget.tx.amount.abs().toStringAsFixed(2));
+    _noteC = TextEditingController(text: widget.tx.description ?? '');
+  }
+
+  @override
+  void dispose() {
+    _amountC.dispose();
+    _noteC.dispose();
+    super.dispose();
   }
 
   List<Map<String, String>> get _cats => categoriesForType(widget.tx.type);
 
   Future<void> _save() async {
     if (_saving) return;
+    final amount = double.tryParse(_amountC.text.trim());
+    if (amount == null || amount <= 0) {
+      showToast(context, '请输入有效金额');
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref.read(databaseProvider).updateTransactionFields(
             widget.tx.id,
             categoryId: _categoryId.isEmpty ? null : _categoryId,
             accountId: _accountId,
+            amount: amount,
+            description: _noteC.text.trim(),
           );
       if (mounted) {
         Navigator.pop(context);
-        showToast(context, '已更新分类/账户');
+        showToast(context, '已保存修改');
       }
     } catch (e) {
       if (mounted) {
@@ -240,9 +258,28 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
                   decoration: BoxDecoration(color: AppTheme.line, borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-              Text('编辑$title · ${formatMoney(widget.tx.amount.abs())}',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 14),
+              Text('编辑$title', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              const Text('金额', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.line),
+                ),
+                child: TextField(
+                  controller: _amountC,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    prefixText: '¥ ',
+                    hintText: '0.00',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text('分类', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
               const SizedBox(height: 10),
               Wrap(
@@ -295,6 +332,24 @@ class _EditTxSheetState extends ConsumerState<_EditTxSheet> {
                 ),
                 loading: () => const CircularProgressIndicator(),
                 error: (_, __) => const Text('账户加载失败'),
+              ),
+              const SizedBox(height: 18),
+              const Text('备注', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.sub)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.line),
+                ),
+                child: TextField(
+                  controller: _noteC,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: '添加备注（可选）',
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               SizedBox(
