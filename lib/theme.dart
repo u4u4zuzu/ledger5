@@ -115,6 +115,7 @@ const Map<String, CategoryMeta> categoryMeta = {
   'cat_salary': CategoryMeta('工资', '💰'),
   'cat_investment': CategoryMeta('理财', '📈'),
   'cat_other_in': CategoryMeta('其他', '📦'),
+  'cat_other_expense': CategoryMeta('其他支出', '🧾'),
 };
 
 String categoryName(String? id) => categoryMeta[id]?.name ?? '其他';
@@ -133,6 +134,7 @@ List<Map<String, String>> categoriesForType(TransactionType type) {
     {'id': 'cat_salary', 'name': '工资', 'emoji': '💰'},
     {'id': 'cat_investment', 'name': '理财', 'emoji': '📈'},
     {'id': 'cat_other_in', 'name': '其他', 'emoji': '📦'},
+    {'id': 'cat_other_expense', 'name': '其他支出', 'emoji': '🧾'},
   ];
   if (type == TransactionType.expense) {
     return all.where((c) => c['id'] != 'cat_salary' && c['id'] != 'cat_investment' && c['id'] != 'cat_other_in').toList();
