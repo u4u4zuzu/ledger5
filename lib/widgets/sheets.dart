@@ -532,6 +532,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
           await db.reduceStockPosition(_code, shares, amount, price: price);
         }
       }
+      await db.recalculateInvestmentAccountBalances();
       if (mounted) {
         Navigator.pop(context);
         showToast(context, isAdd ? '已加仓' : '已减仓');
@@ -552,6 +553,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     } else {
       await db.deleteStockHolding(widget.holding.id);
     }
+    await db.recalculateInvestmentAccountBalances();
     if (mounted) {
       Navigator.pop(context);
       showToast(context, '已清仓');
@@ -567,6 +569,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     } else {
       await db.deleteStockHolding(widget.holding.id);
     }
+    await db.recalculateInvestmentAccountBalances();
     if (mounted) {
       Navigator.pop(context);
       showToast(context, '已删除');
@@ -898,6 +901,7 @@ class _AddAssetSheetState extends ConsumerState<_AddAssetSheet> {
       } else {
         await db.addStockPosition(code, name, shares, amount, _accountId!, price: price);
       }
+      await db.recalculateInvestmentAccountBalances();
       if (mounted) {
         Navigator.pop(context);
         showToast(context, '添加成功：$name');
