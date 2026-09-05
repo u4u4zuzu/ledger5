@@ -395,7 +395,9 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final mv = _shares * _price;
+    final mv = widget.isFund
+        ? (widget.holding.holdingAmount ?? (_shares * _price))
+        : (_shares * _price);
     final profit = mv - _cost;
     final rate = _cost > 0 ? profit / _cost * 100 : 0.0;
     final cls = profit >= 0 ? AppTheme.green : AppTheme.red;
@@ -418,7 +420,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
           marginBottom: 12,
           child: Column(
             children: [
-              _kv('当前市值', formatMoney(mv)),
+              _kv('当前市值${widget.isFund && widget.holding.holdingAmount != null ? '(手动)' : ''}', formatMoney(mv)),
               const SizedBox(height: 6),
               _kv('${widget.isFund ? '最新净值' : '现价'}', '¥${_price.toStringAsFixed(widget.isFund ? 4 : 2)}'),
               const SizedBox(height: 6),
@@ -434,6 +436,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
         ),
         _primaryButton(_busy ? '处理中…' : '按金额加仓', _busy ? null : () => _doAmountAction(true)),
         _ghostButton('按金额减仓', _busy ? null : () => _doAmountAction(false)),
+        _ghostButton('编辑持仓', _busy ? null : _editHolding),
         _ghostButton('清仓', _busy ? null : _clear),
         _ghostButton('刷新$unit', _busy ? null : _refresh),
         _ghostButton('删除', _busy ? null : _delete, danger: true),
@@ -585,6 +588,156 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
       if (mounted) showToast(context, '已刷新行情');
     } catch (_) {
       if (mounted) showToast(context, '刷新失败，请检查网络');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  // 直接编辑持仓：基金填「持有金额 + 持仓成本」；股票填「持有股数 + 持仓成本（+现价）」
+  Future<void> _editHolding() async {
+    final amountC = TextEditingController();
+    final costC = TextEditingController();
+    final sharesC = TextEditingController();
+    final priceC = TextEditingController();
+
+    if (widget.isFund) {
+      final h = widget.holding.holdingAmount;
+      amountC.text = (h != null ? h : _shares * _price).toStringAsFixed(2);
+      costC.text = _cost.toStringAsFixed(2);
+    } else {
+      sharesC.text = _shares.toStringAsFixed(0);
+      costC.text = _cost.toStringAsFixed(2);
+      priceC.text = _price > 0 ? _price.toStringAsFixed(2) : '';
+    }
+
+    await _showSheet(context, StatefulBuilder(
+      builder: (ctx, setSt) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _handle(),
+          Text(widget.isFund ? '编辑基金持仓' : '编辑股票持仓',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          if (widget.isFund) ...[
+            _sectionTitle('持有金额（元，当前市值）'),
+            TextField(
+              controller: amountC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '持有金额',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _sectionTitle('持仓成本（元）'),
+            TextField(
+              controller: costC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '持仓成本',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('参考：持有 ${_shares.toStringAsFixed(0)} 份 · 净值 ¥${_price.toStringAsFixed(4)}',
+                style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
+          ] else ...[
+            _sectionTitle('持有股数（股）'),
+            TextField(
+              controller: sharesC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '持有股数',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _sectionTitle('持仓成本（元）'),
+            TextField(
+              controller: costC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '持仓成本',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _sectionTitle('现价（元，留空用原值 ¥${_price.toStringAsFixed(2)}）'),
+            TextField(
+              controller: priceC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '现价',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          _primaryButton('保存', () {
+            if (widget.isFund) {
+              final amt = double.tryParse(amountC.text);
+              final cost = double.tryParse(costC.text);
+              if (amt == null || amt < 0 || cost == null || cost < 0) {
+                showToast(context, '请输入有效数值');
+                return;
+              }
+              Navigator.pop(ctx);
+              _applyEdit(isFund: true, holdingAmount: amt, totalCost: cost);
+            } else {
+              final sh = double.tryParse(sharesC.text);
+              final cost = double.tryParse(costC.text);
+              if (sh == null || sh <= 0 || cost == null || cost < 0) {
+                showToast(context, '请输入有效数值');
+                return;
+              }
+              final manual = double.tryParse(priceC.text);
+              final price = (manual != null && manual > 0) ? manual : _price;
+              Navigator.pop(ctx);
+              _applyEdit(isFund: false, totalShares: sh, totalCost: cost, lastPrice: price);
+            }
+          }),
+          _ghostButton('取消', () => Navigator.pop(ctx)),
+        ],
+      ),
+    ));
+
+    amountC.dispose();
+    costC.dispose();
+    sharesC.dispose();
+    priceC.dispose();
+  }
+
+  Future<void> _applyEdit({
+    required bool isFund,
+    double? holdingAmount,
+    double? totalCost,
+    double? totalShares,
+    double? lastPrice,
+  }) async {
+    final db = ref.read(databaseProvider);
+    setState(() => _busy = true);
+    try {
+      if (isFund) {
+        await db.updateFundHoldingValues(widget.holding.id,
+            holdingAmount: holdingAmount, totalCost: totalCost);
+      } else {
+        await db.updateStockHoldingValues(widget.holding.id,
+            totalShares: totalShares, totalCost: totalCost);
+        if (lastPrice != null && lastPrice > 0) {
+          await db.updateStockPrice(widget.holding.stockCode, lastPrice);
+        }
+      }
+      await db.recalculateInvestmentAccountBalances();
+      if (mounted) {
+        Navigator.pop(context);
+        showToast(context, '已更新持仓');
+      }
+    } catch (e) {
+      if (mounted) showToast(context, '操作失败：$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
