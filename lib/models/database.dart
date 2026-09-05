@@ -153,7 +153,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -198,6 +198,12 @@ class AppDatabase extends _$AppDatabase {
       // v5：补齐账户余额自愈——因早期版本加仓/减仓/清仓/删除未触发重算，
       // 导致「我的账户」中基金/股票账户余额过期，升级时统一重算一次
       if (from < 5) {
+        await recalculateInvestmentAccountBalances();
+      }
+      // v6：重算口径改为「全部基金→基金账户 / 全部股票→股票账户」，
+      // 不再按单条持仓 accountId 归集，修复基金账户金额与基金总资产对不上的问题。
+      // 已停在 v5 的用户升级到此版本时，靠本分支再次重算自愈。
+      if (from < 6) {
         await recalculateInvestmentAccountBalances();
       }
     },
@@ -975,24 +981,34 @@ class AppDatabase extends _$AppDatabase {
     return true;
   }
 
-  /// 重算所有投资账户余额 = 基金市值 + 股票市值
-  /// 保证基金刷新与股票刷新不会互相覆盖对方写入的市值
+  /// 重算所有投资账户余额
+  /// 约定：基金账户(acc_invest) = 全部基金市值；股票账户(acc_stock) = 全部股票市值。
+  /// 不再按单条持仓的 accountId 归集，避免「加基金时选错关联账户」导致基金账户金额对不上基金总资产。
   Future<void> recalculateInvestmentAccountBalances() async {
     final accounts = await getAllAccounts();
     final fundHoldings = await getActiveFundHoldings();
     final stockHoldings = await getActiveStockHoldings();
 
+    // 全部基金市值 / 全部股票市值（与「基金页/股票页」总资产口径一致）
+    final totalFund = fundHoldings.fold(0.0, (s, f) => s + (f.holdingAmount ?? (f.totalShares * f.lastNav)));
+    final totalStock = stockHoldings.fold(0.0, (s, x) => s + x.totalShares * x.lastPrice);
+
     for (final acc in accounts) {
       if (acc.type != AccountType.investment) continue;
-
-      final fundValue = fundHoldings
-          .where((f) => f.accountId == acc.id)
-          .fold(0.0, (sum, f) => sum + (f.holdingAmount ?? (f.totalShares * f.lastNav)));
-      final stockValue = stockHoldings
-          .where((s) => s.accountId == acc.id)
-          .fold(0.0, (sum, s) => sum + s.totalShares * s.lastPrice);
-
-      await updateAccountBalance(acc.id, fundValue + stockValue);
+      if (acc.id == 'acc_invest') {
+        await updateAccountBalance(acc.id, totalFund);
+      } else if (acc.id == 'acc_stock') {
+        await updateAccountBalance(acc.id, totalStock);
+      } else {
+        // 其它自定义投资类账户：按原持仓归集（兼容扩展）
+        final fv = fundHoldings
+            .where((f) => f.accountId == acc.id)
+            .fold(0.0, (s, f) => s + (f.holdingAmount ?? (f.totalShares * f.lastNav)));
+        final sv = stockHoldings
+            .where((s) => s.accountId == acc.id)
+            .fold(0.0, (s, x) => s + x.totalShares * x.lastPrice);
+        await updateAccountBalance(acc.id, fv + sv);
+      }
     }
   }
 
