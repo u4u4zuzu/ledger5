@@ -153,7 +153,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -170,6 +170,30 @@ class AppDatabase extends _$AppDatabase {
       // v3：基金持仓新增「持有金额」字段（手动填写当前市值）
       if (from < 3) {
         await m.addColumn(fundHoldings, fundHoldings.holdingAmount);
+      }
+      // v4：拆分投资账户为「基金账户」与「股票账户」
+      if (from < 4) {
+        // 原有的「投资账户」改名为「基金账户」
+        await (update(accounts)..where((a) => a.id.equals('acc_invest'))).write(
+          const AccountsCompanion(name: Value('基金账户')),
+        );
+        // 新增「股票账户」（若已存在则跳过）
+        final stockAcc = await (select(accounts)..where((a) => a.id.equals('acc_stock'))).getSingleOrNull();
+        if (stockAcc == null) {
+          await into(accounts).insert(const AccountsCompanion(
+            id: Value('acc_stock'),
+            name: Value('股票账户'),
+            type: Value(AccountType.investment),
+            currentBalance: Value(0.0),
+            sortOrder: Value(6),
+          ));
+        }
+        // 把股票持仓从原投资账户迁移到股票账户
+        await (update(stockHoldings)..where((s) => s.accountId.equals('acc_invest'))).write(
+          const StockHoldingsCompanion(accountId: Value('acc_stock')),
+        );
+        // 重算两账户余额（基金账户=基金总值，股票账户=股票总值）
+        await recalculateInvestmentAccountBalances();
       }
     },
   );
@@ -220,8 +244,9 @@ class AppDatabase extends _$AppDatabase {
       ));
     }
 
-    // 2) 账户（余额与预览一致；投资账户余额由持仓重算得到）
-    const String investId = 'acc_invest';
+    // 2) 账户（余额与预览一致；基金账户/股票账户余额由持仓重算得到）
+    const String investId = 'acc_invest';   // 基金账户
+    const String stockId = 'acc_stock';     // 股票账户
     final seedAccounts = <AccountsCompanion>[
       const AccountsCompanion(
         id: Value('acc_wechat'), name: Value('微信钱包'),
@@ -244,8 +269,12 @@ class AppDatabase extends _$AppDatabase {
         type: Value(AccountType.credit), currentBalance: Value(-1200.0), sortOrder: Value(4),
       ),
       const AccountsCompanion(
-        id: Value(investId), name: Value('投资账户'),
+        id: Value(investId), name: Value('基金账户'),
         type: Value(AccountType.investment), currentBalance: Value(0.0), sortOrder: Value(5),
+      ),
+      const AccountsCompanion(
+        id: Value(stockId), name: Value('股票账户'),
+        type: Value(AccountType.investment), currentBalance: Value(0.0), sortOrder: Value(6),
       ),
     ];
     for (final a in seedAccounts) {
@@ -305,7 +334,7 @@ class AppDatabase extends _$AppDatabase {
       await into(transactions).insert(t);
     }
 
-    // 4) 基金持仓（份额 × 净值 = 市值，自动写入投资账户）
+    // 4) 基金持仓（份额 × 净值 = 市值，自动写入基金账户）
     await into(fundHoldings).insert(FundHoldingsCompanion(
       fundCode: const Value('005827'), fundName: const Value('易方达蓝筹精选'),
       totalShares: const Value(1200), totalCost: const Value(2820),
@@ -319,21 +348,21 @@ class AppDatabase extends _$AppDatabase {
       lastUpdate: Value(now),
     ));
 
-    // 5) 股票持仓
+    // 5) 股票持仓（股数 × 现价 = 市值，自动写入股票账户）
     await into(stockHoldings).insert(StockHoldingsCompanion(
       stockCode: const Value('600519'), stockName: const Value('贵州茅台'),
       totalShares: const Value(100), totalCost: const Value(168000),
-      lastPrice: const Value(1720), accountId: const Value(investId),
+      lastPrice: const Value(1720), accountId: const Value(stockId),
       lastUpdate: Value(now),
     ));
     await into(stockHoldings).insert(StockHoldingsCompanion(
       stockCode: const Value('300750'), stockName: const Value('宁德时代'),
       totalShares: const Value(200), totalCost: const Value(37000),
-      lastPrice: const Value(201), accountId: const Value(investId),
+      lastPrice: const Value(201), accountId: const Value(stockId),
       lastUpdate: Value(now),
     ));
 
-    // 6) 重算投资账户余额 = 基金市值 + 股票市值
+    // 6) 重算账户余额：基金账户=基金总值，股票账户=股票总值
     await recalculateInvestmentAccountBalances();
   }
 
