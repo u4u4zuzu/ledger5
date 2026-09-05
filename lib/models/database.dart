@@ -89,6 +89,7 @@ class FundHoldings extends Table {
   RealColumn get totalShares => real()();        // 总持有份额（加仓增加，减仓减少）
   RealColumn get totalCost => real()();          // 总成本金额（加仓增加，减仓按比例减少）
   RealColumn get lastNav => real().withDefault(const Constant(0))();  // 最新单位净值
+  RealColumn get holdingAmount => real().nullable()();  // 持有金额（手动填写的当前市值；为空则用 份额×净值 估算）
   TextColumn get accountId => text().references(Accounts, #id)();   // 关联投资账户
   DateTimeColumn get lastUpdate => dateTime().nullable()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
@@ -152,7 +153,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -165,6 +166,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.createTable(stockHoldings);
         await m.createTable(stockTransactions);
+      }
+      // v3：基金持仓新增「持有金额」字段（手动填写当前市值）
+      if (from < 3) {
+        await m.addColumn(fundHoldings, fundHoldings.holdingAmount);
       }
     },
   );
@@ -641,6 +646,20 @@ class AppDatabase extends _$AppDatabase {
     await (delete(fundHoldings)..where((f) => f.id.equals(id))).go();
   }
 
+  /// 直接编辑基金持仓的「持有金额」与「持仓成本」
+  /// holdingAmount 为 null 表示不修改（保留原有值或继续用 份额×净值 估算）
+  Future<void> updateFundHoldingValues(String id, {double? holdingAmount, double? totalCost}) async {
+    final existing = await (select(fundHoldings)..where((f) => f.id.equals(id))).getSingleOrNull();
+    if (existing == null) return;
+    await (update(fundHoldings)..where((f) => f.id.equals(id))).write(
+      FundHoldingsCompanion(
+        holdingAmount: holdingAmount != null ? Value(holdingAmount) : const Value.absent(),
+        totalCost: totalCost != null ? Value(totalCost) : const Value.absent(),
+        lastUpdate: Value(DateTime.now()),
+      ),
+    );
+  }
+
   /// 加仓（只输入金额，系统自动获取净值计算份额）
   Future<void> addFundPositionByAmount(String fundCode, String fundName, double amount, String accountId) async {
     if (amount <= 0) throw Exception('金额必须大于0');
@@ -836,6 +855,20 @@ class AppDatabase extends _$AppDatabase {
     await (delete(stockHoldings)..where((f) => f.id.equals(id))).go();
   }
 
+  /// 直接编辑股票持仓的「持有股数」与「持仓成本」
+  /// 任一参数为 null 表示不修改
+  Future<void> updateStockHoldingValues(String id, {double? totalShares, double? totalCost}) async {
+    final existing = await (select(stockHoldings)..where((f) => f.id.equals(id))).getSingleOrNull();
+    if (existing == null) return;
+    await (update(stockHoldings)..where((f) => f.id.equals(id))).write(
+      StockHoldingsCompanion(
+        totalShares: totalShares != null ? Value(totalShares) : const Value.absent(),
+        totalCost: totalCost != null ? Value(totalCost) : const Value.absent(),
+        lastUpdate: Value(DateTime.now()),
+      ),
+    );
+  }
+
   /// 加仓（只输入金额，系统自动获取价格计算股数）
   Future<void> addStockPositionByAmount(String stockCode, String stockName, double amount, String accountId) async {
     if (amount <= 0) throw Exception('金额必须大于0');
@@ -920,7 +953,7 @@ class AppDatabase extends _$AppDatabase {
 
       final fundValue = fundHoldings
           .where((f) => f.accountId == acc.id)
-          .fold(0.0, (sum, f) => sum + f.totalShares * f.lastNav);
+          .fold(0.0, (sum, f) => sum + (f.holdingAmount ?? (f.totalShares * f.lastNav)));
       final stockValue = stockHoldings
           .where((s) => s.accountId == acc.id)
           .fold(0.0, (sum, s) => sum + s.totalShares * s.lastPrice);
