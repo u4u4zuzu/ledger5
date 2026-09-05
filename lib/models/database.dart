@@ -153,7 +153,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -193,6 +193,11 @@ class AppDatabase extends _$AppDatabase {
           const StockHoldingsCompanion(accountId: Value('acc_stock')),
         );
         // 重算两账户余额（基金账户=基金总值，股票账户=股票总值）
+        await recalculateInvestmentAccountBalances();
+      }
+      // v5：补齐账户余额自愈——因早期版本加仓/减仓/清仓/删除未触发重算，
+      // 导致「我的账户」中基金/股票账户余额过期，升级时统一重算一次
+      if (from < 5) {
         await recalculateInvestmentAccountBalances();
       }
     },
