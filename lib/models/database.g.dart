@@ -1597,6 +1597,12 @@ class $FundHoldingsTable extends FundHoldings
       type: DriftSqlType.double,
       requiredDuringInsert: false,
       defaultValue: const Constant(0));
+  static const VerificationMeta _holdingAmountMeta =
+      const VerificationMeta('holdingAmount');
+  @override
+  late final GeneratedColumn<double> holdingAmount = GeneratedColumn<double>(
+      'holding_amount', aliasedName, true,
+      type: DriftSqlType.double, requiredDuringInsert: false);
   static const VerificationMeta _accountIdMeta =
       const VerificationMeta('accountId');
   @override
@@ -1630,6 +1636,7 @@ class $FundHoldingsTable extends FundHoldings
         totalShares,
         totalCost,
         lastNav,
+        holdingAmount,
         accountId,
         lastUpdate,
         isActive
@@ -1677,6 +1684,12 @@ class $FundHoldingsTable extends FundHoldings
       context.handle(_lastNavMeta,
           lastNav.isAcceptableOrUnknown(data['last_nav']!, _lastNavMeta));
     }
+    if (data.containsKey('holding_amount')) {
+      context.handle(
+          _holdingAmountMeta,
+          holdingAmount.isAcceptableOrUnknown(
+              data['holding_amount']!, _holdingAmountMeta));
+    }
     if (data.containsKey('account_id')) {
       context.handle(_accountIdMeta,
           accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta));
@@ -1714,6 +1727,8 @@ class $FundHoldingsTable extends FundHoldings
           .read(DriftSqlType.double, data['${effectivePrefix}total_cost'])!,
       lastNav: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}last_nav'])!,
+      holdingAmount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}holding_amount']),
       accountId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}account_id'])!,
       lastUpdate: attachedDatabase.typeMapping
@@ -1736,6 +1751,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
   final double totalShares;
   final double totalCost;
   final double lastNav;
+  final double? holdingAmount;
   final String accountId;
   final DateTime? lastUpdate;
   final bool isActive;
@@ -1746,6 +1762,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
       required this.totalShares,
       required this.totalCost,
       required this.lastNav,
+      this.holdingAmount,
       required this.accountId,
       this.lastUpdate,
       required this.isActive});
@@ -1758,6 +1775,9 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
     map['total_shares'] = Variable<double>(totalShares);
     map['total_cost'] = Variable<double>(totalCost);
     map['last_nav'] = Variable<double>(lastNav);
+    if (!nullToAbsent || holdingAmount != null) {
+      map['holding_amount'] = Variable<double>(holdingAmount);
+    }
     map['account_id'] = Variable<String>(accountId);
     if (!nullToAbsent || lastUpdate != null) {
       map['last_update'] = Variable<DateTime>(lastUpdate);
@@ -1774,6 +1794,9 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
       totalShares: Value(totalShares),
       totalCost: Value(totalCost),
       lastNav: Value(lastNav),
+      holdingAmount: holdingAmount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(holdingAmount),
       accountId: Value(accountId),
       lastUpdate: lastUpdate == null && nullToAbsent
           ? const Value.absent()
@@ -1792,6 +1815,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
       totalShares: serializer.fromJson<double>(json['totalShares']),
       totalCost: serializer.fromJson<double>(json['totalCost']),
       lastNav: serializer.fromJson<double>(json['lastNav']),
+      holdingAmount: serializer.fromJson<double?>(json['holdingAmount']),
       accountId: serializer.fromJson<String>(json['accountId']),
       lastUpdate: serializer.fromJson<DateTime?>(json['lastUpdate']),
       isActive: serializer.fromJson<bool>(json['isActive']),
@@ -1807,6 +1831,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
       'totalShares': serializer.toJson<double>(totalShares),
       'totalCost': serializer.toJson<double>(totalCost),
       'lastNav': serializer.toJson<double>(lastNav),
+      'holdingAmount': serializer.toJson<double?>(holdingAmount),
       'accountId': serializer.toJson<String>(accountId),
       'lastUpdate': serializer.toJson<DateTime?>(lastUpdate),
       'isActive': serializer.toJson<bool>(isActive),
@@ -1820,6 +1845,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
           double? totalShares,
           double? totalCost,
           double? lastNav,
+          Value<double?> holdingAmount = const Value.absent(),
           String? accountId,
           Value<DateTime?> lastUpdate = const Value.absent(),
           bool? isActive}) =>
@@ -1830,6 +1856,8 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
         totalShares: totalShares ?? this.totalShares,
         totalCost: totalCost ?? this.totalCost,
         lastNav: lastNav ?? this.lastNav,
+        holdingAmount:
+            holdingAmount.present ? holdingAmount.value : this.holdingAmount,
         accountId: accountId ?? this.accountId,
         lastUpdate: lastUpdate.present ? lastUpdate.value : this.lastUpdate,
         isActive: isActive ?? this.isActive,
@@ -1843,6 +1871,9 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
           data.totalShares.present ? data.totalShares.value : this.totalShares,
       totalCost: data.totalCost.present ? data.totalCost.value : this.totalCost,
       lastNav: data.lastNav.present ? data.lastNav.value : this.lastNav,
+      holdingAmount: data.holdingAmount.present
+          ? data.holdingAmount.value
+          : this.holdingAmount,
       accountId: data.accountId.present ? data.accountId.value : this.accountId,
       lastUpdate:
           data.lastUpdate.present ? data.lastUpdate.value : this.lastUpdate,
@@ -1859,6 +1890,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
           ..write('totalShares: $totalShares, ')
           ..write('totalCost: $totalCost, ')
           ..write('lastNav: $lastNav, ')
+          ..write('holdingAmount: $holdingAmount, ')
           ..write('accountId: $accountId, ')
           ..write('lastUpdate: $lastUpdate, ')
           ..write('isActive: $isActive')
@@ -1868,7 +1900,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
 
   @override
   int get hashCode => Object.hash(id, fundCode, fundName, totalShares,
-      totalCost, lastNav, accountId, lastUpdate, isActive);
+      totalCost, lastNav, holdingAmount, accountId, lastUpdate, isActive);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1879,6 +1911,7 @@ class FundHolding extends DataClass implements Insertable<FundHolding> {
           other.totalShares == this.totalShares &&
           other.totalCost == this.totalCost &&
           other.lastNav == this.lastNav &&
+          other.holdingAmount == this.holdingAmount &&
           other.accountId == this.accountId &&
           other.lastUpdate == this.lastUpdate &&
           other.isActive == this.isActive);
@@ -1891,6 +1924,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
   final Value<double> totalShares;
   final Value<double> totalCost;
   final Value<double> lastNav;
+  final Value<double?> holdingAmount;
   final Value<String> accountId;
   final Value<DateTime?> lastUpdate;
   final Value<bool> isActive;
@@ -1902,6 +1936,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
     this.totalShares = const Value.absent(),
     this.totalCost = const Value.absent(),
     this.lastNav = const Value.absent(),
+    this.holdingAmount = const Value.absent(),
     this.accountId = const Value.absent(),
     this.lastUpdate = const Value.absent(),
     this.isActive = const Value.absent(),
@@ -1914,6 +1949,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
     required double totalShares,
     required double totalCost,
     this.lastNav = const Value.absent(),
+    this.holdingAmount = const Value.absent(),
     required String accountId,
     this.lastUpdate = const Value.absent(),
     this.isActive = const Value.absent(),
@@ -1930,6 +1966,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
     Expression<double>? totalShares,
     Expression<double>? totalCost,
     Expression<double>? lastNav,
+    Expression<double>? holdingAmount,
     Expression<String>? accountId,
     Expression<DateTime>? lastUpdate,
     Expression<bool>? isActive,
@@ -1942,6 +1979,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
       if (totalShares != null) 'total_shares': totalShares,
       if (totalCost != null) 'total_cost': totalCost,
       if (lastNav != null) 'last_nav': lastNav,
+      if (holdingAmount != null) 'holding_amount': holdingAmount,
       if (accountId != null) 'account_id': accountId,
       if (lastUpdate != null) 'last_update': lastUpdate,
       if (isActive != null) 'is_active': isActive,
@@ -1956,6 +1994,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
       Value<double>? totalShares,
       Value<double>? totalCost,
       Value<double>? lastNav,
+      Value<double?>? holdingAmount,
       Value<String>? accountId,
       Value<DateTime?>? lastUpdate,
       Value<bool>? isActive,
@@ -1967,6 +2006,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
       totalShares: totalShares ?? this.totalShares,
       totalCost: totalCost ?? this.totalCost,
       lastNav: lastNav ?? this.lastNav,
+      holdingAmount: holdingAmount ?? this.holdingAmount,
       accountId: accountId ?? this.accountId,
       lastUpdate: lastUpdate ?? this.lastUpdate,
       isActive: isActive ?? this.isActive,
@@ -1995,6 +2035,9 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
     if (lastNav.present) {
       map['last_nav'] = Variable<double>(lastNav.value);
     }
+    if (holdingAmount.present) {
+      map['holding_amount'] = Variable<double>(holdingAmount.value);
+    }
     if (accountId.present) {
       map['account_id'] = Variable<String>(accountId.value);
     }
@@ -2019,6 +2062,7 @@ class FundHoldingsCompanion extends UpdateCompanion<FundHolding> {
           ..write('totalShares: $totalShares, ')
           ..write('totalCost: $totalCost, ')
           ..write('lastNav: $lastNav, ')
+          ..write('holdingAmount: $holdingAmount, ')
           ..write('accountId: $accountId, ')
           ..write('lastUpdate: $lastUpdate, ')
           ..write('isActive: $isActive, ')
@@ -4145,6 +4189,7 @@ typedef $$FundHoldingsTableCreateCompanionBuilder = FundHoldingsCompanion
   required double totalShares,
   required double totalCost,
   Value<double> lastNav,
+  Value<double?> holdingAmount,
   required String accountId,
   Value<DateTime?> lastUpdate,
   Value<bool> isActive,
@@ -4158,6 +4203,7 @@ typedef $$FundHoldingsTableUpdateCompanionBuilder = FundHoldingsCompanion
   Value<double> totalShares,
   Value<double> totalCost,
   Value<double> lastNav,
+  Value<double?> holdingAmount,
   Value<String> accountId,
   Value<DateTime?> lastUpdate,
   Value<bool> isActive,
@@ -4187,6 +4233,7 @@ class $$FundHoldingsTableTableManager extends RootTableManager<
             Value<double> totalShares = const Value.absent(),
             Value<double> totalCost = const Value.absent(),
             Value<double> lastNav = const Value.absent(),
+            Value<double?> holdingAmount = const Value.absent(),
             Value<String> accountId = const Value.absent(),
             Value<DateTime?> lastUpdate = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
@@ -4199,6 +4246,7 @@ class $$FundHoldingsTableTableManager extends RootTableManager<
             totalShares: totalShares,
             totalCost: totalCost,
             lastNav: lastNav,
+            holdingAmount: holdingAmount,
             accountId: accountId,
             lastUpdate: lastUpdate,
             isActive: isActive,
@@ -4211,6 +4259,7 @@ class $$FundHoldingsTableTableManager extends RootTableManager<
             required double totalShares,
             required double totalCost,
             Value<double> lastNav = const Value.absent(),
+            Value<double?> holdingAmount = const Value.absent(),
             required String accountId,
             Value<DateTime?> lastUpdate = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
@@ -4223,6 +4272,7 @@ class $$FundHoldingsTableTableManager extends RootTableManager<
             totalShares: totalShares,
             totalCost: totalCost,
             lastNav: lastNav,
+            holdingAmount: holdingAmount,
             accountId: accountId,
             lastUpdate: lastUpdate,
             isActive: isActive,
@@ -4261,6 +4311,11 @@ class $$FundHoldingsTableFilterComposer
 
   ColumnFilters<double> get lastNav => $state.composableBuilder(
       column: $state.table.lastNav,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<double> get holdingAmount => $state.composableBuilder(
+      column: $state.table.holdingAmount,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
@@ -4317,6 +4372,11 @@ class $$FundHoldingsTableOrderingComposer
 
   ColumnOrderings<double> get lastNav => $state.composableBuilder(
       column: $state.table.lastNav,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<double> get holdingAmount => $state.composableBuilder(
+      column: $state.table.holdingAmount,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
