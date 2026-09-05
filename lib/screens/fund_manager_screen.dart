@@ -86,7 +86,8 @@ class FundManagerScreen extends ConsumerWidget {
   }
 
   static _Pos _calc(FundHolding h) {
-    final mv = h.totalShares * h.lastNav;
+    // 持有金额优先用用户手动填写的值，否则用 份额×净值 估算
+    final mv = h.holdingAmount ?? (h.totalShares * h.lastNav);
     final profit = mv - h.totalCost;
     final rate = h.totalCost > 0 ? profit / h.totalCost * 100 : 0.0;
     return _Pos(holding: h, mv: mv, cost: h.totalCost, profit: profit, rate: rate);
@@ -157,8 +158,19 @@ class _FundCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('净值 ¥${h.lastNav.toStringAsFixed(4)} · 成本 ¥${(h.totalCost / h.totalShares).toStringAsFixed(4)}',
+                Expanded(
+                  child: Text(
+                    '持有 ${h.totalShares.toStringAsFixed(0)} 份 · 净值 ¥${h.lastNav.toStringAsFixed(4)} · 成本 ¥${(h.totalCost / h.totalShares).toStringAsFixed(4)}',
                     style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
+                ),
+                if (h.holdingAmount != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: AppTheme.primarySoft, borderRadius: BorderRadius.circular(20)),
+                    child: const Text('手动市值', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                  ),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(color: AppTheme.primarySoft, borderRadius: BorderRadius.circular(20)),
