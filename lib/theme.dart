@@ -92,7 +92,7 @@ const Map<AccountType, AccountMeta> accountMeta = {
   AccountType.debit: AccountMeta('银行卡', '🏦', Color(0xFF9b6cff)),
   AccountType.credit: AccountMeta('信用卡', '💳', Color(0xFFf0506e)),
   AccountType.ewallet: AccountMeta('电子钱包', '💚', Color(0xFF1ab97f)),
-  AccountType.investment: AccountMeta('投资账户', '📊', Color(0xFF26c6c6)),
+  AccountType.investment: AccountMeta('投资', '📊', Color(0xFF26c6c6)),
   AccountType.other: AccountMeta('其他', '💼', Color(0xFF8a93a3)),
 };
 
