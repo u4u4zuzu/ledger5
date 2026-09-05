@@ -849,14 +849,14 @@ class _AddAssetSheetState extends ConsumerState<_AddAssetSheet> {
           ),
         ),
         const SizedBox(height: 12),
-        _sectionTitle('关联投资账户'),
+        _sectionTitle('关联账户（基金 / 股票）'),
         StreamBuilder<List<Account>>(
           stream: ref.read(databaseProvider).watchAllAccounts(),
           builder: (ctx, snap) {
             final inv = (snap.data ?? []).where((a) => a.type == AccountType.investment).toList();
             _accountId ??= inv.isNotEmpty ? inv.first.id : null;
             if (inv.isEmpty) {
-              return const Text('请先在「账户」中创建投资账户', style: TextStyle(color: AppTheme.sub));
+              return const Text('请先在「账户」中创建基金 / 股票账户', style: TextStyle(color: AppTheme.sub));
             }
             return DropdownButtonFormField<String>(
               value: _accountId,
