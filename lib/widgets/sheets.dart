@@ -395,9 +395,8 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final mv = widget.isFund
-        ? (widget.holding.holdingAmount ?? (_shares * _price))
-        : (_shares * _price);
+    // 持有金额 = 最新净值 × 持有份额（始终自动计算）
+    final mv = _shares * _price;
     final profit = mv - _cost;
     final rate = _cost > 0 ? profit / _cost * 100 : 0.0;
     final cls = profit >= 0 ? AppTheme.green : AppTheme.red;
@@ -420,11 +419,13 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
           marginBottom: 12,
           child: Column(
             children: [
-              _kv('当前市值${widget.isFund && widget.holding.holdingAmount != null ? '(手动)' : ''}', formatMoney(mv)),
-              const SizedBox(height: 6),
-              _kv('${widget.isFund ? '最新净值' : '现价'}', '¥${_price.toStringAsFixed(widget.isFund ? 4 : 2)}'),
+              _kv('持有金额（自动）', formatMoney(mv)),
               const SizedBox(height: 6),
               _kv('持仓成本', formatMoney(_cost)),
+              const SizedBox(height: 6),
+              _kv('持有份额', '${_shares.toStringAsFixed(0)} 份'),
+              const SizedBox(height: 6),
+              _kv('${widget.isFund ? '最新净值' : '现价'}', '¥${_price.toStringAsFixed(widget.isFund ? 4 : 2)}'),
               const SizedBox(height: 6),
               _kv(
                 '累计收益',
@@ -596,16 +597,14 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     }
   }
 
-  // 直接编辑持仓：基金填「持有金额 + 持仓成本」；股票填「持有股数 + 持仓成本（+现价）」
+  // 直接编辑持仓：基金只改「持仓成本」（持有金额由净值×份额自动计算）；
+  // 股票填「持有股数 + 持仓成本（+现价）」
   Future<void> _editHolding() async {
-    final amountC = TextEditingController();
     final costC = TextEditingController();
     final sharesC = TextEditingController();
     final priceC = TextEditingController();
 
     if (widget.isFund) {
-      final h = widget.holding.holdingAmount;
-      amountC.text = (h != null ? h : _shares * _price).toStringAsFixed(2);
       costC.text = _cost.toStringAsFixed(2);
     } else {
       sharesC.text = _shares.toStringAsFixed(0);
@@ -622,17 +621,6 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           if (widget.isFund) ...[
-            _sectionTitle('持有金额（元，当前市值）'),
-            TextField(
-              controller: amountC,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: '持有金额',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              ),
-            ),
-            const SizedBox(height: 12),
             _sectionTitle('持仓成本（元）'),
             TextField(
               controller: costC,
@@ -644,7 +632,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            Text('参考：持有 ${_shares.toStringAsFixed(0)} 份 · 净值 ¥${_price.toStringAsFixed(4)}',
+            Text('持有金额自动 = 持有 ${_shares.toStringAsFixed(0)} 份 × 净值 ¥${_price.toStringAsFixed(4)} = ¥${(_shares * _price).toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
           ] else ...[
             _sectionTitle('持有股数（股）'),
@@ -682,14 +670,13 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
           const SizedBox(height: 14),
           _primaryButton('保存', () {
             if (widget.isFund) {
-              final amt = double.tryParse(amountC.text);
               final cost = double.tryParse(costC.text);
-              if (amt == null || amt < 0 || cost == null || cost < 0) {
+              if (cost == null || cost < 0) {
                 showToast(context, '请输入有效数值');
                 return;
               }
               Navigator.pop(ctx);
-              _applyEdit(isFund: true, holdingAmount: amt, totalCost: cost);
+              _applyEdit(isFund: true, totalCost: cost);
             } else {
               final sh = double.tryParse(sharesC.text);
               final cost = double.tryParse(costC.text);
@@ -708,7 +695,6 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
       ),
     ));
 
-    amountC.dispose();
     costC.dispose();
     sharesC.dispose();
     priceC.dispose();
