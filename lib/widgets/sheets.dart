@@ -597,7 +597,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     }
   }
 
-  // 直接编辑持仓：基金只改「持仓成本」（持有金额由净值×份额自动计算）；
+  // 直接编辑持仓：基金填「持有份额 + 持仓净值成本」（最终持仓成本 = 净值成本 × 份额）；
   // 股票填「持有股数 + 持仓成本（+现价）」
   Future<void> _editHolding() async {
     final costC = TextEditingController();
@@ -605,7 +605,9 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     final priceC = TextEditingController();
 
     if (widget.isFund) {
-      costC.text = _cost.toStringAsFixed(2);
+      sharesC.text = _shares.toStringAsFixed(0);
+      // 持仓净值成本（元/份）= 总成本 / 持有份额
+      costC.text = (_shares > 0 ? _cost / _shares : 0).toStringAsFixed(4);
     } else {
       sharesC.text = _shares.toStringAsFixed(0);
       costC.text = _cost.toStringAsFixed(2);
@@ -621,19 +623,38 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           if (widget.isFund) ...[
-            _sectionTitle('持仓成本（元）'),
+            _sectionTitle('持有份额（份）'),
+            TextField(
+              controller: sharesC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setSt(() {}),
+              decoration: const InputDecoration(
+                labelText: '持有份额',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _sectionTitle('持仓净值成本（元/份）'),
             TextField(
               controller: costC,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setSt(() {}),
               decoration: const InputDecoration(
-                labelText: '持仓成本',
+                labelText: '持仓净值成本',
                 prefixText: '¥ ',
                 border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
               ),
             ),
             const SizedBox(height: 8),
-            Text('持有金额自动 = 持有 ${_shares.toStringAsFixed(0)} 份 × 净值 ¥${_price.toStringAsFixed(4)} = ¥${(_shares * _price).toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
+            Builder(
+              builder: (c) {
+                final sh = double.tryParse(sharesC.text) ?? 0;
+                final nc = double.tryParse(costC.text) ?? 0;
+                return Text(
+                  '最终持仓成本 = ${sh.toStringAsFixed(0)} 份 × ¥${nc.toStringAsFixed(4)} = ¥${(sh * nc).toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.sub));
+              },
+            ),
           ] else ...[
             _sectionTitle('持有股数（股）'),
             TextField(
@@ -670,13 +691,15 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
           const SizedBox(height: 14),
           _primaryButton('保存', () {
             if (widget.isFund) {
-              final cost = double.tryParse(costC.text);
-              if (cost == null || cost < 0) {
+              final sh = double.tryParse(sharesC.text);
+              final nc = double.tryParse(costC.text);
+              if (sh == null || sh < 0 || nc == null || nc < 0) {
                 showToast(context, '请输入有效数值');
                 return;
               }
+              // 最终持仓成本 = 持仓净值成本 × 持有份额
               Navigator.pop(ctx);
-              _applyEdit(isFund: true, totalCost: cost);
+              _applyEdit(isFund: true, totalShares: sh, totalCost: sh * nc);
             } else {
               final sh = double.tryParse(sharesC.text);
               final cost = double.tryParse(costC.text);
@@ -712,7 +735,7 @@ class _AssetDetailSheetState extends ConsumerState<_AssetDetailSheet> {
     try {
       if (isFund) {
         await db.updateFundHoldingValues(widget.holding.id,
-            holdingAmount: holdingAmount, totalCost: totalCost);
+            totalShares: totalShares, totalCost: totalCost);
       } else {
         await db.updateStockHoldingValues(widget.holding.id,
             totalShares: totalShares, totalCost: totalCost);
