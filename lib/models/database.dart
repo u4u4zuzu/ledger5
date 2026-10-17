@@ -688,11 +688,12 @@ class AppDatabase extends _$AppDatabase {
 
   /// 直接编辑基金持仓的「持有金额」与「持仓成本」
   /// holdingAmount 为 null 表示不修改（保留原有值或继续用 份额×净值 估算）
-  Future<void> updateFundHoldingValues(String id, {double? holdingAmount, double? totalCost}) async {
+  Future<void> updateFundHoldingValues(String id, {double? totalShares, double? holdingAmount, double? totalCost}) async {
     final existing = await (select(fundHoldings)..where((f) => f.id.equals(id))).getSingleOrNull();
     if (existing == null) return;
     await (update(fundHoldings)..where((f) => f.id.equals(id))).write(
       FundHoldingsCompanion(
+        totalShares: totalShares != null ? Value(totalShares) : const Value.absent(),
         holdingAmount: holdingAmount != null ? Value(holdingAmount) : const Value.absent(),
         totalCost: totalCost != null ? Value(totalCost) : const Value.absent(),
         lastUpdate: Value(DateTime.now()),
