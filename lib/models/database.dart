@@ -990,7 +990,8 @@ class AppDatabase extends _$AppDatabase {
     final stockHoldings = await getActiveStockHoldings();
 
     // 全部基金市值 / 全部股票市值（与「基金页/股票页」总资产口径一致）
-    final totalFund = fundHoldings.fold(0.0, (s, f) => s + (f.holdingAmount ?? (f.totalShares * f.lastNav)));
+    // 基金市值 = 持有份额 × 最新净值（始终自动计算，刷新净值即更新）
+    final totalFund = fundHoldings.fold(0.0, (s, f) => s + f.totalShares * f.lastNav);
     final totalStock = stockHoldings.fold(0.0, (s, x) => s + x.totalShares * x.lastPrice);
 
     for (final acc in accounts) {
