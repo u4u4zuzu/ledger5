@@ -23,6 +23,9 @@ class FundManagerScreen extends ConsumerWidget {
         final totalMv = positions.fold(0.0, (s, p) => s + p.mv);
         final profit = totalMv - totalCost;
         final rate = totalCost > 0 ? profit / totalCost * 100 : 0.0;
+        // 收益部分金额（各持仓正收益之和）与亏损部分金额（各持仓负收益绝对值之和）
+        final gainAmount = positions.where((p) => p.profit > 0).fold(0.0, (s, p) => s + p.profit);
+        final lossAmount = positions.where((p) => p.profit < 0).fold(0.0, (s, p) => s - p.profit);
 
         return Column(
           children: [
@@ -41,6 +44,17 @@ class FundManagerScreen extends ConsumerWidget {
                       _Stat('累计收益',
                           '${profit >= 0 ? '+' : ''}${formatMoney(profit)}',
                           color: profit >= 0 ? AppTheme.green : AppTheme.red),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _Stat('收益金额',
+                          '${gainAmount >= 0 ? '+' : ''}${formatMoney(gainAmount)}',
+                          color: AppTheme.green),
+                      _Stat('亏损金额',
+                          '${lossAmount >= 0 ? '-' : ''}${formatMoney(lossAmount)}',
+                          color: AppTheme.red),
                       _Stat('收益率',
                           '${rate >= 0 ? '+' : ''}${rate.toStringAsFixed(1)}%',
                           color: rate >= 0 ? AppTheme.green : AppTheme.red),
@@ -86,8 +100,8 @@ class FundManagerScreen extends ConsumerWidget {
   }
 
   static _Pos _calc(FundHolding h) {
-    // 持有金额优先用用户手动填写的值，否则用 份额×净值 估算
-    final mv = h.holdingAmount ?? (h.totalShares * h.lastNav);
+    // 持有金额 = 最新净值 × 持有份额（始终自动计算，刷新净值即更新）
+    final mv = h.totalShares * h.lastNav;
     final profit = mv - h.totalCost;
     final rate = h.totalCost > 0 ? profit / h.totalCost * 100 : 0.0;
     return _Pos(holding: h, mv: mv, cost: h.totalCost, profit: profit, rate: rate);
@@ -139,38 +153,40 @@ class _FundCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(h.fundName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                      Text('${h.fundCode} · 持有 ${h.totalShares.toStringAsFixed(0)} 份',
-                          style: const TextStyle(fontSize: 11, color: AppTheme.sub)),
+                      Text(h.fundCode, style: const TextStyle(fontSize: 11, color: AppTheme.sub)),
                     ],
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(formatMoney(data.mv), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                    Text('${data.profit >= 0 ? '+' : ''}${formatMoney(data.profit)} (${data.rate >= 0 ? '+' : ''}${data.rate.toStringAsFixed(1)}%)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cls)),
+                    Text(formatMoney(data.mv), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const Text('持有金额', style: TextStyle(fontSize: 11, color: AppTheme.sub)),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _kvFlex('持仓成本', formatMoney(data.cost)),
+                _kvFlex('持有份额', '${h.totalShares.toStringAsFixed(0)} 份'),
+                _kvFlex('最新净值', '¥${h.lastNav.toStringAsFixed(4)}'),
+              ],
+            ),
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    '持有 ${h.totalShares.toStringAsFixed(0)} 份 · 净值 ¥${h.lastNav.toStringAsFixed(4)} · 成本 ¥${(h.totalCost / h.totalShares).toStringAsFixed(4)}',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.sub)),
-                ),
-                if (h.holdingAmount != null) ...[
-                  Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: AppTheme.primarySoft, borderRadius: BorderRadius.circular(20)),
-                    child: const Text('手动市值', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primary)),
-                  ),
-                ],
+                const Text('累计收益', style: TextStyle(fontSize: 12, color: AppTheme.sub)),
+                Text('${data.profit >= 0 ? '+' : ''}${formatMoney(data.profit)} (${data.rate >= 0 ? '+' : ''}${data.rate.toStringAsFixed(1)}%)',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cls)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(color: AppTheme.primarySoft, borderRadius: BorderRadius.circular(20)),
@@ -183,4 +199,15 @@ class _FundCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _kvFlex(String label, String value) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.sub)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.ink)),
+          ],
+        ),
+      );
 }
